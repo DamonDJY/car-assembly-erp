@@ -1,0 +1,209 @@
+### 全局变量
+@baseUrl = http://localhost:8080
+
+### ========================
+### 1. 基础档案 (Master Data)
+### ========================
+
+### 1.1 创建零件
+POST {{baseUrl}}/api/parts
+Content-Type: application/json
+
+{
+  "sku": "WINDSHIELD-001",
+  "name": "挡风玻璃",
+  "specification": "前挡钢化玻璃",
+  "unit": "块",
+  "safetyStock": 2
+}
+
+### 1.2 查询零件 (底盘 - 种子数据)
+GET {{baseUrl}}/api/parts/11111111-1111-1111-1111-111111111111
+
+### 1.3 查询零件 (整车 - 种子数据)
+GET {{baseUrl}}/api/parts/66666666-6666-6666-6666-666666666666
+
+### 1.4 创建 BOM 节点 ( windshield -> 整车 )
+POST {{baseUrl}}/api/bom-nodes
+Content-Type: application/json
+
+{
+  "parentPartId": "66666666-6666-6666-6666-666666666666",
+  "childPartId": "11111111-1111-1111-1111-111111111111",
+  "quantity": 1
+}
+
+### 1.5 BOM 展开 (整车)
+GET {{baseUrl}}/api/parts/66666666-6666-6666-6666-666666666666/bom-explosion
+
+### 1.6 BOM 展开 (引擎)
+GET {{baseUrl}}/api/parts/33333333-3333-3333-3333-333333333333/bom-explosion
+
+### ========================
+### 2. 库存管理 (Inventory)
+### ========================
+
+### 2.1 入库 ( windshield )
+POST {{baseUrl}}/api/inventory/inbound
+Content-Type: application/json
+
+{
+  "partId": "11111111-1111-1111-1111-111111111111",
+  "quantity": 50
+}
+
+### 2.2 出库 ( 轮胎 )
+POST {{baseUrl}}/api/inventory/outbound
+Content-Type: application/json
+
+{
+  "partId": "22222222-2222-2222-2222-222222222222",
+  "quantity": 10
+}
+
+### 2.3 安全库存预警
+GET {{baseUrl}}/api/parts/low-stock
+
+### ========================
+### 3. 生产执行 (Production) - 端到端闭环
+### ========================
+
+### 3.1 创建工位 (如需要)
+POST {{baseUrl}}/api/workstations
+Content-Type: application/json
+
+{
+  "name": "总装线B",
+  "location": "车间2"
+}
+
+### 3.2 创建生产订单 (生产 5 辆整车)
+POST {{baseUrl}}/api/production-orders
+Content-Type: application/json
+
+{
+  "targetPartId": "66666666-6666-6666-6666-666666666666",
+  "quantity": 5,
+  "plannedStartDate": "2026-05-01T08:00:00Z",
+  "workstationId": "77777777-7777-7777-7777-777777777777"
+}
+
+### 3.3 查询生产订单 (请将上面的 id 填入)
+GET {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a
+
+### 3.4 齐套检查
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/check-material
+
+### 3.5 开工
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/start
+
+### 3.6 组装确认 (第1台)
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+
+### 3.7 组装确认 (第2台)
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+
+### 3.8 组装确认 (第3台)
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+
+### 3.9 组装确认 (第4台)
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+
+### 3.10 组装确认 (第5台 - 订单自动完成)
+POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+
+### ========================
+### 4. 边界情况测试
+### ========================
+
+### 4.1 创建重复 SKU (应返回 409 Conflict)
+POST {{baseUrl}}/api/parts
+Content-Type: application/json
+
+{
+  "sku": "CHASSIS-001",
+  "name": "底盘重复",
+  "specification": "测试",
+  "unit": "个",
+  "safetyStock": 1
+}
+
+### 4.2 出库数量大于库存 (应返回 400 InsufficientStock)
+POST {{baseUrl}}/api/inventory/outbound
+Content-Type: application/json
+
+{
+  "partId": "44444444-4444-4444-4444-444444444444",
+  "quantity": 999
+}
+
+### 4.3 创建 BOM 自引用 (应返回 400 SelfReference)
+POST {{baseUrl}}/api/bom-nodes
+Content-Type: application/json
+
+{
+  "parentPartId": "11111111-1111-1111-1111-111111111111",
+  "childPartId": "11111111-1111-1111-1111-111111111111",
+  "quantity": 1
+}
+
+### 4.4 创建 BOM 循环引用 (应返回 400 CircularReference)
+### 先建立 A->B, B->C, 再尝试 C->A
+POST {{baseUrl}}/api/bom-nodes
+Content-Type: application/json
+
+{
+  "parentPartId": "44444444-4444-4444-4444-444444444444",
+  "childPartId": "66666666-6666-6666-6666-666666666666",
+  "quantity": 1
+}
+
+### 4.5 重复父-子 BOM 节点 (应返回 409 DuplicateBomNode)
+POST {{baseUrl}}/api/bom-nodes
+Content-Type: application/json
+
+{
+  "parentPartId": "66666666-6666-6666-6666-666666666666",
+  "childPartId": "33333333-3333-3333-3333-333333333333",
+  "quantity": 2
+}
+
+### ========================
+### 5. 可观测性
+### ========================
+
+### 5.1 健康检查
+GET {{baseUrl}}/health
+
+### 5.2 触发 404 (观察全局异常处理中间件日志)
+GET {{baseUrl}}/api/nonexistent-endpoint
+
+### 5.3 触发 500 (理论上不会出现，但可观察日志)
+### 故意省略，如需测试可在代码中手动抛异常
+
+### ========================
+### 6. 验收清单 - 完整数据校验
+### ========================
+
+### 6.1 校验各零件最终库存
+GET {{baseUrl}}/api/parts/11111111-1111-1111-1111-111111111111
+### 期望: stockQuantity = 5 (初始10 - 消耗5)
+
+GET {{baseUrl}}/api/parts/22222222-2222-2222-2222-222222222222
+### 期望: stockQuantity = 80 (初始100 - 消耗20)
+
+GET {{baseUrl}}/api/parts/33333333-3333-3333-3333-333333333333
+### 期望: stockQuantity = 0 (初始5 - 消耗5)
+
+GET {{baseUrl}}/api/parts/44444444-4444-4444-4444-444444444444
+### 期望: stockQuantity = 0 (初始20 - 消耗20)
+
+GET {{baseUrl}}/api/parts/55555555-5555-5555-5555-555555555555
+### 期望: stockQuantity = 440 (初始500 - 消耗60)
+
+GET {{baseUrl}}/api/parts/66666666-6666-6666-6666-666666666666
+### 期望: stockQuantity = 5 (初始0 + 产出5)
+
+### 6.2 校验订单状态为 Completed
+GET {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a
+### 期望: status = "Completed", completedQuantity = 5
