@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: car-erp
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+    disk:
+      name: pgdata
+      mountPath: /var/lib/postgresql/17/main
+      sizeGB: 1
