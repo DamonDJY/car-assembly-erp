@@ -1,5 +1,5 @@
 ### 全局变量
-@baseUrl = http://localhost:8080
+@baseUrl = https://car-assembly-erp.onrender.com
 
 ### ========================
 ### 1. 基础档案 (Master Data)
@@ -89,28 +89,28 @@ Content-Type: application/json
 }
 
 ### 3.3 查询生产订单 (请将上面的 id 填入)
-GET {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a
+GET {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496
 
 ### 3.4 齐套检查
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/check-material
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/check-material
 
 ### 3.5 开工
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/start
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/start
 
 ### 3.6 组装确认 (第1台)
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/confirm-assembly
 
 ### 3.7 组装确认 (第2台)
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/confirm-assembly
 
 ### 3.8 组装确认 (第3台)
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/confirm-assembly
 
 ### 3.9 组装确认 (第4台)
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/confirm-assembly
 
 ### 3.10 组装确认 (第5台 - 订单自动完成)
-POST {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a/confirm-assembly
+POST {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496/confirm-assembly
 
 ### ========================
 ### 4. 边界情况测试
@@ -205,5 +205,5 @@ GET {{baseUrl}}/api/parts/66666666-6666-6666-6666-666666666666
 ### 期望: stockQuantity = 5 (初始0 + 产出5)
 
 ### 6.2 校验订单状态为 Completed
-GET {{baseUrl}}/api/production-orders/5521055a-44d0-4d7d-9e91-8a7236a1eb1a
+GET {{baseUrl}}/api/production-orders/5b13dddf-76de-4127-82fd-b5e5eabc4496
 ### 期望: status = "Completed", completedQuantity = 5
