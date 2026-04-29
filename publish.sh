@@ -34,6 +34,28 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
+# 尝试用 API 创建仓库（如果不存在）
+echo ""
+echo "检查/创建 GitHub 仓库..."
+HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: token ${GH_TOKEN}" \
+    -H "Accept: application/vnd.github.v3+json" \
+    https://api.github.com/repos/${GH_USER}/${GH_REPO})
+
+if [ "$HTTP_STATUS" = "404" ]; then
+    echo "仓库不存在，正在创建公开仓库..."
+    curl -s -o /dev/null -w "%{http_code}" \
+        -X POST \
+        -H "Authorization: token ${GH_TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -d '{"name":"'${GH_REPO}'","private":false}' \
+        https://api.github.com/user/repos | grep -q "201" && echo "✅ 仓库创建成功"
+elif [ "$HTTP_STATUS" = "200" ]; then
+    echo "✅ 仓库已存在"
+else
+    echo "⚠️ 无法确认仓库状态 (HTTP ${HTTP_STATUS})，继续尝试推送..."
+fi
+
 # 配置 remote（使用 token 嵌入 URL 的方式，避免交互式密码输入）
 REMOTE_URL="https://${GH_USER}:${GH_TOKEN}@github.com/${GH_USER}/${GH_REPO}.git"
 
@@ -55,6 +77,7 @@ else
 fi
 
 # 推送
+echo ""
 echo "开始推送到 GitHub..."
 if git push -u origin main; then
     echo ""
@@ -76,7 +99,6 @@ else
     echo "❌ 推送失败"
     echo "请检查:"
     echo "  - Token 是否有 'repo' 权限"
-    echo "  - 仓库是否已存在 (若不存在会先创建)"
     echo "  - 用户名和仓库名是否正确"
     exit 1
 fi
