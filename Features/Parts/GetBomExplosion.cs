@@ -20,9 +20,8 @@ public class GetBomExplosionHandler : IRequestHandler<GetBomExplosionQuery, List
         var partDict = parts.ToDictionary(p => p.Id);
 
         var result = new List<BomExplosionItem>();
-        var visited = new HashSet<(Guid, int)>();
 
-        void Explode(Guid partId, decimal multiplier, int level, HashSet<Guid> path)
+        void Explode(Guid partId, int multiplier, int level, HashSet<Guid> path)
         {
             if (path.Contains(partId))
                 throw new Common.BusinessException("CircularReference", "BOM contains a circular reference.");
@@ -30,9 +29,6 @@ public class GetBomExplosionHandler : IRequestHandler<GetBomExplosionQuery, List
             var children = bomNodes.Where(n => n.ParentPartId == partId).ToList();
             foreach (var child in children)
             {
-                var key = (child.ChildPartId, level + 1);
-                if (!visited.Add(key)) continue;
-
                 if (!partDict.TryGetValue(child.ChildPartId, out var childPart)) continue;
 
                 var totalQty = child.Quantity * multiplier;

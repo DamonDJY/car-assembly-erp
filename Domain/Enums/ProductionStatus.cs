@@ -3,10 +3,12 @@ namespace CarAssemblyErp.Domain.Enums;
 public enum ProductionStatus
 {
     Draft = 0,
-    MaterialShortage = 1,
-    Ready = 2,
-    InProgress = 3,
-    Completed = 4
+    MaterialChecked = 1,
+    MaterialShortage = 2,
+    Ready = 3,
+    InProgress = 4,
+    Completed = 5,
+    Cancelled = 6
 }
 
 public enum TransactionType

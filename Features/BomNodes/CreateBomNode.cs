@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarAssemblyErp.Features.BomNodes;
 
-public record CreateBomNodeCommand(Guid ParentPartId, Guid ChildPartId, decimal Quantity) : IRequest<BomNodeDto>;
+public record CreateBomNodeCommand(Guid ParentPartId, Guid ChildPartId, int Quantity) : IRequest<BomNodeDto>;
 
-public record BomNodeDto(Guid Id, Guid ParentPartId, Guid ChildPartId, decimal Quantity);
+public record BomNodeDto(Guid Id, Guid ParentPartId, Guid ChildPartId, int Quantity);
 
 public class CreateBomNodeHandler : IRequestHandler<CreateBomNodeCommand, BomNodeDto>
 {

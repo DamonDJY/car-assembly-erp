@@ -7,7 +7,7 @@ public class Part
     public string Name { get; set; } = null!;
     public string? Specification { get; set; }
     public string Unit { get; set; } = null!;
-    public decimal SafetyStock { get; set; }
-    public decimal StockQuantity { get; set; }
+    public int SafetyStock { get; set; }
+    public int StockQuantity { get; set; }
     public DateTime CreatedAt { get; set; }
 }
