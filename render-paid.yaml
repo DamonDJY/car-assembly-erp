@@ -1,0 +1,19 @@
+# ============================================================
+# Render Blueprint 配置 - 付费版 (Starter Plan)
+# 需要 Render Starter Plan ($7/月) 才能使用 Disk
+# 此配置可持久化 PostgreSQL 数据，重新部署不会丢失
+# ============================================================
+
+services:
+  - type: web
+    name: car-erp
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+    disk:
+      name: pgdata
+      mountPath: /var/lib/postgresql/17/main
+      sizeGB: 1

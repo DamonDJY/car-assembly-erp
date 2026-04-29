@@ -1,3 +1,10 @@
+# ============================================================
+# Render Blueprint 配置 - 免费版 (Free Tier)
+# 限制说明：Free Tier 不支持 Disk，PostgreSQL 数据存储在容器内。
+# 每次重新部署或休眠唤醒后，数据会重置为种子数据状态。
+# 如需持久化数据，请升级到 Starter Plan ($7/月) 并使用 render-paid.yaml
+# ============================================================
+
 services:
   - type: web
     name: car-erp
@@ -7,7 +14,3 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-    disk:
-      name: pgdata
-      mountPath: /var/lib/postgresql/17/main
-      sizeGB: 1
