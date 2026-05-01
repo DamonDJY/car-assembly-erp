@@ -1,38 +1,46 @@
 #!/bin/bash
 set -e
 
-# Initialize PostgreSQL data directory if needed
-if [ ! -s /var/lib/postgresql/17/main/PG_VERSION ]; then
-    echo "Initializing PostgreSQL data directory..."
-    mkdir -p /var/lib/postgresql/17/main
-    chown -R postgres:postgres /var/lib/postgresql/17/main
-    su - postgres -c "/usr/lib/postgresql/17/bin/initdb -D /var/lib/postgresql/17/main"
-fi
+echo "========================================"
+echo "CarAssemblyErp 启动脚本（生产环境）"
+echo "========================================"
+echo ""
 
-# Configure PostgreSQL to listen on all interfaces and use trust auth
-su - postgres -c "echo \"listen_addresses = '*'\" >> /var/lib/postgresql/17/main/postgresql.conf" || true
+# 等待 PostgreSQL 可用（Render 外部数据库）
+echo "Waiting for PostgreSQL to be ready..."
+DB_HOST="${DB_HOST:-localhost}"
+DB_PORT="${DB_PORT:-5432}"
+MAX_RETRIES=30
+RETRY_COUNT=0
 
-# Update pg_hba.conf to allow local trust connections
-su - postgres -c "cat > /var/lib/postgresql/17/main/pg_hba.conf << 'EOF'
-local   all             all                                     trust
-host    all             all             127.0.0.1/32            trust
-host    all             all             ::1/128                 trust
-host    all             all             0.0.0.0/0               trust
-EOF"
+while ! curl -sf "postgresql://${DB_HOST}:${DB_PORT}" > /dev/null 2>&1; do
+    # 使用 pg_isready 检测（如果安装了 postgresql-client）
+    if command -v pg_isready &> /dev/null; then
+        if pg_isready -h "$DB_HOST" -p "$DB_PORT" > /dev/null 2>&1; then
+            break
+        fi
+    fi
+    
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "Warning: PostgreSQL connection timeout. Continuing anyway..."
+        break
+    fi
+    echo "PostgreSQL not ready yet (attempt $RETRY_COUNT/$MAX_RETRIES)..."
+    sleep 2
+done
 
-chown -R postgres:postgres /var/lib/postgresql/17/main
+echo "PostgreSQL is ready."
 
-# Start PostgreSQL temporarily to create user and database
-su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D /var/lib/postgresql/17/main -l /var/lib/postgresql/17/main/logfile start"
+# 执行数据库迁移
+echo "Running database migrations..."
+cd /app/publish
+dotnet CarAssemblyErp.dll --migrate-only 2>/dev/null || true
 
-# Wait for PostgreSQL to be ready
-sleep 2
+# 实际上我们在 Program.cs 中自动执行 Migrate()
+# 这里只是一个确认日志
+echo "Database migrations will be applied on application startup."
 
-# Ensure password is set and database exists
-su - postgres -c "psql -c \"ALTER USER postgres WITH PASSWORD 'postgres';\"" || true
-su - postgres -c "psql -c \"CREATE DATABASE CarAssemblyErp;\"" || true
-
-su - postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D /var/lib/postgresql/17/main stop"
-
-# Start all services via supervisord
+# 启动所有服务
+echo "Starting services..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

@@ -27,10 +27,28 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+// 数据库初始化：开发环境快速创建，生产环境执行 Migration
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.EnsureCreated();
+    
+    if (app.Environment.IsDevelopment())
+    {
+        db.Database.EnsureCreated();
+    }
+    else
+    {
+        try
+        {
+            db.Database.Migrate();
+        }
+        catch (Exception ex)
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            logger.LogError(ex, "Database migration failed. Please ensure the connection string is correct and the database is accessible.");
+            throw;
+        }
+    }
 }
 
 // Health check
@@ -41,7 +59,7 @@ app.MapGet("/health", async (AppDbContext db) =>
         await db.Database.ExecuteSqlRawAsync("SELECT 1");
         return Results.Ok(new { status = "healthy", database = "connected" });
     }
-    catch (Exception ex)
+    catch
     {
         return Results.StatusCode(503);
     }
