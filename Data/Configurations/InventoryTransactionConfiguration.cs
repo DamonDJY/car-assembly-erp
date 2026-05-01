@@ -9,9 +9,11 @@ public class InventoryTransactionConfiguration : IEntityTypeConfiguration<Invent
     public void Configure(EntityTypeBuilder<InventoryTransaction> builder)
     {
         builder.HasKey(x => x.Id);
-        builder.Property(x => x.Quantity).HasPrecision(18, 4);
-        builder.Property(x => x.RunningBalance).HasPrecision(18, 4);
-        builder.Property(x => x.ReferenceNumber).HasMaxLength(100);
+        builder.Property(x => x.Quantity);
+        builder.Property(x => x.RunningBalance);
+        builder.Property(x => x.ReferenceType).HasMaxLength(50);
+        builder.Property(x => x.Remark).HasMaxLength(500);
         builder.HasOne(x => x.Part).WithMany().HasForeignKey(x => x.PartId);
+        builder.ToTable(t => t.HasCheckConstraint("CK_InventoryTransaction_Quantity", "\"Quantity\" <> 0"));
     }
 }

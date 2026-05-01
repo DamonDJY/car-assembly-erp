@@ -10,10 +10,12 @@ public class ProductionOrderConfiguration : IEntityTypeConfiguration<ProductionO
     {
         builder.HasKey(x => x.Id);
         builder.Property(x => x.OrderNumber).HasMaxLength(50).IsRequired();
-        builder.Property(x => x.Quantity).HasPrecision(18, 4);
-        builder.Property(x => x.CompletedQuantity).HasPrecision(18, 4);
+        builder.Property(x => x.Quantity);
+        builder.Property(x => x.CompletedQuantity);
         builder.HasOne(x => x.TargetPart).WithMany().HasForeignKey(x => x.TargetPartId);
         builder.HasOne(x => x.Workstation).WithMany().HasForeignKey(x => x.WorkstationId);
         builder.HasIndex(x => x.OrderNumber).IsUnique();
+        builder.ToTable(t => t.HasCheckConstraint("CK_ProductionOrder_Quantity", "\"Quantity\" > 0"));
+        builder.ToTable(t => t.HasCheckConstraint("CK_ProductionOrder_CompletedQuantity", "\"CompletedQuantity\" >= 0 AND \"CompletedQuantity\" <= \"Quantity\""));
     }
 }

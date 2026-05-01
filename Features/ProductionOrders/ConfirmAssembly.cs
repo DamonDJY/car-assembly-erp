@@ -32,19 +32,22 @@ public class ConfirmAssemblyHandler : IRequestHandler<ConfirmAssemblyCommand, Pr
         var parts = await _db.Parts.ToListAsync(cancellationToken);
         var partDict = parts.ToDictionary(p => p.Id);
 
-        var requirements = new Dictionary<Guid, decimal>();
-        void Collect(Guid partId, decimal multiplier)
+        var requirements = new Dictionary<Guid, int>();
+        void Collect(Guid partId, int multiplier, HashSet<Guid> path)
         {
+            if (path.Contains(partId))
+                throw new Common.BusinessException("CircularReference", "BOM contains a circular reference.");
+
             var children = bomNodes.Where(n => n.ParentPartId == partId).ToList();
             foreach (var child in children)
             {
-                if (!requirements.ContainsKey(child.ChildPartId))
-                    requirements[child.ChildPartId] = 0;
-                requirements[child.ChildPartId] += child.Quantity * multiplier;
-                Collect(child.ChildPartId, child.Quantity * multiplier);
+                var req = child.Quantity * multiplier;
+                requirements[child.ChildPartId] = requirements.GetValueOrDefault(child.ChildPartId) + req;
+                var newPath = new HashSet<Guid>(path) { partId };
+                Collect(child.ChildPartId, req, newPath);
             }
         }
-        Collect(order.TargetPartId, 1);
+        Collect(order.TargetPartId, 1, new HashSet<Guid>());
 
         foreach (var (partId, required) in requirements)
         {
@@ -66,7 +69,8 @@ public class ConfirmAssemblyHandler : IRequestHandler<ConfirmAssemblyCommand, Pr
                 TransactionType = TransactionType.ProductionConsume,
                 Quantity = -required,
                 RunningBalance = part.StockQuantity,
-                ReferenceNumber = order.OrderNumber,
+                ReferenceType = "ProductionOrder",
+                ReferenceId = order.Id,
                 CreatedAt = DateTime.UtcNow
             });
         }
@@ -80,7 +84,8 @@ public class ConfirmAssemblyHandler : IRequestHandler<ConfirmAssemblyCommand, Pr
             TransactionType = TransactionType.ProductionOutput,
             Quantity = 1,
             RunningBalance = targetPart.StockQuantity,
-            ReferenceNumber = order.OrderNumber,
+            ReferenceType = "ProductionOrder",
+            ReferenceId = order.Id,
             CreatedAt = DateTime.UtcNow
         });
 

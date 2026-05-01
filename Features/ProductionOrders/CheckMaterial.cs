@@ -29,22 +29,24 @@ public class CheckMaterialHandler : IRequestHandler<CheckMaterialCommand, Materi
         var parts = await _db.Parts.AsNoTracking().ToListAsync(cancellationToken);
         var partDict = parts.ToDictionary(p => p.Id);
 
-        var requirements = new Dictionary<Guid, decimal>();
+        var requirements = new Dictionary<Guid, int>();
 
-        void Collect(Guid partId, decimal multiplier)
+        void Collect(Guid partId, int multiplier, HashSet<Guid> path)
         {
+            if (path.Contains(partId))
+                throw new Common.BusinessException("CircularReference", "BOM contains a circular reference.");
+
             var children = bomNodes.Where(n => n.ParentPartId == partId).ToList();
             foreach (var child in children)
             {
                 var req = child.Quantity * multiplier;
-                if (!requirements.ContainsKey(child.ChildPartId))
-                    requirements[child.ChildPartId] = 0;
-                requirements[child.ChildPartId] += req;
-                Collect(child.ChildPartId, req);
+                requirements[child.ChildPartId] = requirements.GetValueOrDefault(child.ChildPartId) + req;
+                var newPath = new HashSet<Guid>(path) { partId };
+                Collect(child.ChildPartId, req, newPath);
             }
         }
 
-        Collect(order.TargetPartId, order.Quantity);
+        Collect(order.TargetPartId, order.Quantity, new HashSet<Guid>());
 
         var shortages = new List<MaterialShortage>();
         foreach (var (partId, required) in requirements)

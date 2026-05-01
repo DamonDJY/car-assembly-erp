@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarAssemblyErp.Features.Parts;
 
-public record CreatePartCommand(string Sku, string Name, string? Specification, string Unit, decimal SafetyStock) : IRequest<PartDto>;
+public record CreatePartCommand(string Sku, string Name, string? Specification, string Unit, int SafetyStock) : IRequest<PartDto>;
 
 public class CreatePartHandler : IRequestHandler<CreatePartCommand, PartDto>
 {

@@ -6,15 +6,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarAssemblyErp.Features.ProductionOrders;
 
-public record CreateProductionOrderCommand(Guid TargetPartId, decimal Quantity, DateTime PlannedStartDate, Guid? WorkstationId) : IRequest<ProductionOrderDto>;
+public record CreateProductionOrderCommand(Guid TargetPartId, int Quantity, DateTime PlannedStartDate, Guid? WorkstationId) : IRequest<ProductionOrderDto>;
 
 public record ProductionOrderDto(
     Guid Id,
     string OrderNumber,
     Guid TargetPartId,
     string TargetPartName,
-    decimal Quantity,
-    decimal CompletedQuantity,
+    int Quantity,
+    int CompletedQuantity,
     string Status,
     DateTime PlannedStartDate,
     DateTime? ActualStartDate,
@@ -25,7 +25,7 @@ public record ProductionOrderDto(
 
 public record MaterialCheckResult(string Status, List<MaterialShortage> Shortages);
 
-public record MaterialShortage(Guid PartId, string Sku, string Name, decimal Required, decimal Available, decimal Short);
+public record MaterialShortage(Guid PartId, string Sku, string Name, int Required, int Available, int Short);
 
 public class CreateProductionOrderHandler : IRequestHandler<CreateProductionOrderCommand, ProductionOrderDto>
 {

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarAssemblyErp.Features.Inventory;
 
-public record InboundCommand(Guid PartId, decimal Quantity) : IRequest<Parts.PartDto>;
+public record InboundCommand(Guid PartId, int Quantity) : IRequest<Parts.PartDto>;
 
 public class InboundHandler : IRequestHandler<InboundCommand, Parts.PartDto>
 {
@@ -34,6 +34,7 @@ public class InboundHandler : IRequestHandler<InboundCommand, Parts.PartDto>
             TransactionType = TransactionType.Inbound,
             Quantity = request.Quantity,
             RunningBalance = part.StockQuantity,
+            ReferenceType = "Inbound",
             CreatedAt = DateTime.UtcNow
         });
 
