@@ -1,5 +1,6 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Enums;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,11 +11,21 @@ public record CheckMaterialCommand(Guid Id) : IRequest<MaterialCheckResult>;
 public class CheckMaterialHandler : IRequestHandler<CheckMaterialCommand, MaterialCheckResult>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public CheckMaterialHandler(AppDbContext db) => _db = db;
+    public CheckMaterialHandler(AppDbContext db, ICacheService cache, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _cache = cache;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<MaterialCheckResult> Handle(CheckMaterialCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         var order = await _db.ProductionOrders
             .Include(o => o.TargetPart)
             .FirstOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
@@ -62,13 +73,19 @@ public class CheckMaterialHandler : IRequestHandler<CheckMaterialCommand, Materi
         {
             order.Status = ProductionStatus.Ready;
             await _db.SaveChangesAsync(cancellationToken);
-            return new MaterialCheckResult("Ready", new List<MaterialShortage>());
         }
         else
         {
             order.Status = ProductionStatus.MaterialShortage;
             await _db.SaveChangesAsync(cancellationToken);
-            return new MaterialCheckResult("MaterialShortage", shortages);
         }
+
+        // 清除生产订单缓存和安全库存缓存
+        await _cache.RemoveAsync($"po:{order.Id}", cancellationToken);
+        await _cache.RemoveAsync("parts:low-stock", cancellationToken);
+
+        return new MaterialCheckResult(
+            shortages.Count == 0 ? "Ready" : "MaterialShortage",
+            shortages);
     }
 }

@@ -1,5 +1,6 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Entities;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,11 +11,21 @@ public record CreatePartCommand(string Sku, string Name, string? Specification, 
 public class CreatePartHandler : IRequestHandler<CreatePartCommand, PartDto>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public CreatePartHandler(AppDbContext db) => _db = db;
+    public CreatePartHandler(AppDbContext db, ICacheService cache, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _cache = cache;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<PartDto> Handle(CreatePartCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         var normalizedSku = request.Sku.Trim().ToUpperInvariant();
         if (await _db.Parts.AnyAsync(p => p.Sku.ToUpper() == normalizedSku, cancellationToken))
             throw new Common.BusinessException("DuplicateSku", $"Part with SKU '{request.Sku}' already exists.");
@@ -33,6 +44,9 @@ public class CreatePartHandler : IRequestHandler<CreatePartCommand, PartDto>
 
         _db.Parts.Add(part);
         await _db.SaveChangesAsync(cancellationToken);
+
+        // 清除安全库存缓存
+        await _cache.RemoveAsync("parts:low-stock", cancellationToken);
 
         return new PartDto(part.Id, part.Sku, part.Name, part.Specification, part.Unit, part.SafetyStock, part.StockQuantity, part.CreatedAt);
     }

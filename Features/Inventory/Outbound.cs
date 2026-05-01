@@ -1,6 +1,7 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Entities;
 using CarAssemblyErp.Domain.Enums;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,11 +12,21 @@ public record OutboundCommand(Guid PartId, int Quantity) : IRequest<Parts.PartDt
 public class OutboundHandler : IRequestHandler<OutboundCommand, Parts.PartDto>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public OutboundHandler(AppDbContext db) => _db = db;
+    public OutboundHandler(AppDbContext db, ICacheService cache, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _cache = cache;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<Parts.PartDto> Handle(OutboundCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         if (request.Quantity <= 0)
             throw new Common.BusinessException("InvalidQuantity", "Quantity must be positive.");
 
@@ -43,6 +54,10 @@ public class OutboundHandler : IRequestHandler<OutboundCommand, Parts.PartDto>
 
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        // 清除相关缓存
+        await _cache.RemoveAsync($"part:{part.Id}", cancellationToken);
+        await _cache.RemoveAsync("parts:low-stock", cancellationToken);
 
         return new Parts.PartDto(part.Id, part.Sku, part.Name, part.Specification, part.Unit, part.SafetyStock, part.StockQuantity, part.CreatedAt);
     }

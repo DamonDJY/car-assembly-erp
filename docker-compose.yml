@@ -1,41 +1,22 @@
 # ============================================================
-# 本地开发环境 Docker Compose
-# 启动 PostgreSQL 17 容器，供本地 dotnet run 或 Docker 调试使用
+# 本地开发环境 Docker Compose (Phase 02)
+# 需要先用 docker-compose.infra.yml 启动 PostgreSQL 主从 + Redis
+# 然后本文件启动 .NET 应用容器
 # ============================================================
 
 services:
-  db:
-    image: postgres:17
-    container_name: car-erp-db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: CarAssemblyErp
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: car-erp-app
     ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # 可选：同时启动 .NET 应用容器（用于完整容器化调试）
-  # 取消下面注释即可启用
-  # app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: car-erp-app
-  #   ports:
-  #     - "8080:80"
-  #   environment:
-  #     - ASPNETCORE_ENVIRONMENT=Development
-  #     - ConnectionStrings__Default=Host=db;Database=CarAssemblyErp;Username=postgres;Password=postgres;Port=5432
-  #   depends_on:
-  #     db:
-  #       condition: service_healthy
-
-volumes:
-  pgdata:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Primary=Host=host.docker.internal;Port=5432;Database=CarAssemblyErp;Username=postgres;Password=postgres
+      - ConnectionStrings__Replica1=Host=host.docker.internal;Port=5433;Database=CarAssemblyErp;Username=postgres;Password=postgres
+      - ConnectionStrings__Replica2=Host=host.docker.internal;Port=5434;Database=CarAssemblyErp;Username=postgres;Password=postgres
+      - Redis__ConnectionString=host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

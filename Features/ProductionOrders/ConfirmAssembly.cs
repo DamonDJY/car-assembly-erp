@@ -1,6 +1,7 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Entities;
 using CarAssemblyErp.Domain.Enums;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,11 +12,21 @@ public record ConfirmAssemblyCommand(Guid Id) : IRequest<ProductionOrderDto>;
 public class ConfirmAssemblyHandler : IRequestHandler<ConfirmAssemblyCommand, ProductionOrderDto>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public ConfirmAssemblyHandler(AppDbContext db) => _db = db;
+    public ConfirmAssemblyHandler(AppDbContext db, ICacheService cache, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _cache = cache;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<ProductionOrderDto> Handle(ConfirmAssemblyCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         var order = await _db.ProductionOrders
             .Include(o => o.TargetPart)
             .FirstOrDefaultAsync(o => o.Id == request.Id, cancellationToken);
@@ -98,6 +109,15 @@ public class ConfirmAssemblyHandler : IRequestHandler<ConfirmAssemblyCommand, Pr
 
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        // 清除相关缓存：生产订单、所有消耗零件、目标零件、安全库存
+        await _cache.RemoveAsync($"po:{order.Id}", cancellationToken);
+        foreach (var partId in requirements.Keys)
+        {
+            await _cache.RemoveAsync($"part:{partId}", cancellationToken);
+        }
+        await _cache.RemoveAsync($"part:{targetPart.Id}", cancellationToken);
+        await _cache.RemoveAsync("parts:low-stock", cancellationToken);
 
         var ws = order.WorkstationId.HasValue
             ? await _db.Workstations.AsNoTracking().FirstOrDefaultAsync(w => w.Id == order.WorkstationId, cancellationToken)

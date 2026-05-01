@@ -1,6 +1,8 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Entities;
 using CarAssemblyErp.Domain.Enums;
+using CarAssemblyErp.Infrastructure.Database;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,12 +32,24 @@ public record MaterialShortage(Guid PartId, string Sku, string Name, int Require
 public class CreateProductionOrderHandler : IRequestHandler<CreateProductionOrderCommand, ProductionOrderDto>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
+    private readonly IConnectionRouter _router;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private static readonly SemaphoreSlim _orderNumberLock = new(1, 1);
 
-    public CreateProductionOrderHandler(AppDbContext db) => _db = db;
+    public CreateProductionOrderHandler(AppDbContext db, ICacheService cache, IConnectionRouter router, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _cache = cache;
+        _router = router;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<ProductionOrderDto> Handle(CreateProductionOrderCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         var orderNumber = await GenerateOrderNumberAsync(cancellationToken);
 
         var order = new ProductionOrder
@@ -53,6 +67,12 @@ public class CreateProductionOrderHandler : IRequestHandler<CreateProductionOrde
 
         _db.ProductionOrders.Add(order);
         await _db.SaveChangesAsync(cancellationToken);
+
+        // 写后读一致性标记：5秒内读取走 Primary
+        await _router.MarkAsWrittenAsync($"po:{order.Id}", TimeSpan.FromSeconds(5));
+
+        // 清除安全库存缓存
+        await _cache.RemoveAsync("parts:low-stock", cancellationToken);
 
         var part = await _db.Parts.AsNoTracking().FirstAsync(p => p.Id == order.TargetPartId, cancellationToken);
         var ws = order.WorkstationId.HasValue

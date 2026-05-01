@@ -1,5 +1,6 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Entities;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,11 +13,21 @@ public record BomNodeDto(Guid Id, Guid ParentPartId, Guid ChildPartId, int Quant
 public class CreateBomNodeHandler : IRequestHandler<CreateBomNodeCommand, BomNodeDto>
 {
     private readonly AppDbContext _db;
+    private readonly ICacheService _cache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public CreateBomNodeHandler(AppDbContext db) => _db = db;
+    public CreateBomNodeHandler(AppDbContext db, ICacheService cache, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _cache = cache;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<BomNodeDto> Handle(CreateBomNodeCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         if (request.ParentPartId == request.ChildPartId)
             throw new Common.BusinessException("SelfReference", "Parent and child part cannot be the same.");
 
@@ -40,7 +51,44 @@ public class CreateBomNodeHandler : IRequestHandler<CreateBomNodeCommand, BomNod
         _db.BomNodes.Add(node);
         await _db.SaveChangesAsync(cancellationToken);
 
+        // 缓存失效：清除该 Part 及其所有祖先的 BOM 缓存
+        var ancestors = FindAllAncestors(allNodes, request.ParentPartId);
+        ancestors.Add(request.ParentPartId);
+
+        foreach (var partId in ancestors)
+        {
+            await _cache.RemoveAsync($"bom:{partId}:v1", cancellationToken);
+            await _cache.RemoveAsync($"bom:{partId}:v1:empty", cancellationToken);
+        }
+
+        // 清除安全库存缓存
+        await _cache.RemoveAsync("parts:low-stock", cancellationToken);
+
         return new BomNodeDto(node.Id, node.ParentPartId, node.ChildPartId, node.Quantity);
+    }
+
+    private static List<Guid> FindAllAncestors(List<BomNode> allNodes, Guid partId)
+    {
+        var ancestors = new List<Guid>();
+        var queue = new Queue<Guid>();
+        queue.Enqueue(partId);
+        var visited = new HashSet<Guid>();
+        visited.Add(partId);
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            var parents = allNodes.Where(n => n.ChildPartId == current).Select(n => n.ParentPartId).ToList();
+            foreach (var parent in parents)
+            {
+                if (visited.Add(parent))
+                {
+                    ancestors.Add(parent);
+                    queue.Enqueue(parent);
+                }
+            }
+        }
+        return ancestors;
     }
 
     private static bool WouldCreateCycle(List<BomNode> nodes, Guid parentId, Guid childId)

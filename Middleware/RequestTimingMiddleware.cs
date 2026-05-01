@@ -27,13 +27,18 @@ public class RequestTimingMiddleware
         {
             stopwatch.Stop();
             var statusCode = context.Response.StatusCode;
-            _logger.LogInformation("[{Timestamp:HH:mm:ss} {Level}] {RequestMethod} {RequestPath} => {StatusCode} in {DurationMs}ms",
+            var db = context.Items["DB"]?.ToString() ?? "Unknown";
+            var cache = context.Items["Cache"]?.ToString() ?? "Miss";
+
+            _logger.LogInformation("[{Timestamp:HH:mm:ss} {Level}] {RequestMethod} {RequestPath} => {StatusCode} in {DurationMs}ms [DB: {Db}, Cache: {Cache}]",
                 DateTime.UtcNow,
                 statusCode >= 400 ? "Warning" : "Information",
                 method,
                 path,
                 statusCode,
-                stopwatch.ElapsedMilliseconds);
+                stopwatch.ElapsedMilliseconds,
+                db,
+                cache);
         }
     }
 }

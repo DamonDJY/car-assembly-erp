@@ -8,13 +8,21 @@ public record GetWorkstationByIdQuery(Guid Id) : IRequest<WorkstationDto?>;
 
 public class GetWorkstationByIdHandler : IRequestHandler<GetWorkstationByIdQuery, WorkstationDto?>
 {
-    private readonly AppDbContext _db;
+    private readonly AppReadDbContext _readDb;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public GetWorkstationByIdHandler(AppDbContext db) => _db = db;
+    public GetWorkstationByIdHandler(AppReadDbContext readDb, IHttpContextAccessor httpContextAccessor)
+    {
+        _readDb = readDb;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<WorkstationDto?> Handle(GetWorkstationByIdQuery request, CancellationToken cancellationToken)
     {
-        var ws = await _db.Workstations.AsNoTracking().FirstOrDefaultAsync(w => w.Id == request.Id, cancellationToken);
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Replica");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
+        var ws = await _readDb.Workstations.AsNoTracking().FirstOrDefaultAsync(w => w.Id == request.Id, cancellationToken);
         if (ws == null) return null;
         return new WorkstationDto(ws.Id, ws.Name, ws.Location, ws.IsActive);
     }

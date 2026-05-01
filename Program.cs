@@ -4,16 +4,42 @@ using CarAssemblyErp.Features.Inventory;
 using CarAssemblyErp.Features.Parts;
 using CarAssemblyErp.Features.ProductionOrders;
 using CarAssemblyErp.Features.Workstations;
+using CarAssemblyErp.Infrastructure.Database;
+using CarAssemblyErp.Infrastructure.Redis;
 using CarAssemblyErp.Middleware;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
+// Redis
+var redisConnectionString = builder.Configuration.GetSection("Redis")["ConnectionString"] ?? "localhost:6379";
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(redisConnectionString));
+builder.Services.AddScoped<ICacheService, RedisCacheService>();
+
+// Connection Router (for read/write splitting + read-your-write consistency)
+builder.Services.AddScoped<IConnectionRouter, PrimaryReplicaRouter>();
+
+// HttpContextAccessor for passing DB/Cache state to middleware
+builder.Services.AddHttpContextAccessor();
+
+// DbContexts: Primary for writes, Replica for reads
+builder.Services.AddDbContext<AppDbContext>((provider, options) =>
+{
+    var router = provider.GetRequiredService<IConnectionRouter>();
+    options.UseNpgsql(router.GetPrimaryConnectionString());
+});
+
+builder.Services.AddDbContext<AppReadDbContext>((provider, options) =>
+{
+    var router = provider.GetRequiredService<IConnectionRouter>();
+    options.UseNpgsql(router.GetReplicaConnectionString());
+});
+
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
 var app = builder.Build();
@@ -30,17 +56,21 @@ if (app.Environment.IsDevelopment())
 // 数据库初始化：开发环境快速创建，生产环境执行 Migration
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    
+    var primaryDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var replicaDb = scope.ServiceProvider.GetRequiredService<AppReadDbContext>();
+
     if (app.Environment.IsDevelopment())
     {
-        db.Database.EnsureCreated();
+        primaryDb.Database.EnsureCreated();
+        // Replica is read-only in streaming replication, EnsureCreated will fail there
+        // but for local dev with bitnami/repmgr, replica is read-only so we skip
+        try { replicaDb.Database.ExecuteSqlRaw("SELECT 1"); } catch { /* replica may be read-only */ }
     }
     else
     {
         try
         {
-            db.Database.Migrate();
+            primaryDb.Database.Migrate();
         }
         catch (Exception ex)
         {
@@ -52,17 +82,44 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Health check
-app.MapGet("/health", async (AppDbContext db) =>
+app.MapGet("/health", async (AppDbContext primaryDb, AppReadDbContext replicaDb, IConnectionMultiplexer redis) =>
 {
+    var results = new Dictionary<string, string>();
+
     try
     {
-        await db.Database.ExecuteSqlRawAsync("SELECT 1");
-        return Results.Ok(new { status = "healthy", database = "connected" });
+        await primaryDb.Database.ExecuteSqlRawAsync("SELECT 1");
+        results["Primary"] = "connected";
     }
-    catch
+    catch (Exception ex)
     {
-        return Results.StatusCode(503);
+        results["Primary"] = $"error: {ex.Message}";
     }
+
+    try
+    {
+        await replicaDb.Database.ExecuteSqlRawAsync("SELECT 1");
+        results["Replica"] = "connected";
+    }
+    catch (Exception ex)
+    {
+        results["Replica"] = $"error: {ex.Message}";
+    }
+
+    try
+    {
+        await redis.GetDatabase().PingAsync();
+        results["Redis"] = "connected";
+    }
+    catch (Exception ex)
+    {
+        results["Redis"] = $"error: {ex.Message}";
+    }
+
+    var allHealthy = results.Values.All(v => v == "connected");
+    return allHealthy
+        ? Results.Ok(new { status = "healthy", details = results })
+        : Results.Json(new { status = "degraded", details = results }, statusCode: 503);
 });
 
 // Parts

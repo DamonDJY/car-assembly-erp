@@ -1,7 +1,7 @@
 using CarAssemblyErp.Data;
 using CarAssemblyErp.Domain.Entities;
+using CarAssemblyErp.Infrastructure.Redis;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace CarAssemblyErp.Features.Workstations;
 
@@ -12,11 +12,19 @@ public record WorkstationDto(Guid Id, string Name, string? Location, bool IsActi
 public class CreateWorkstationHandler : IRequestHandler<CreateWorkstationCommand, WorkstationDto>
 {
     private readonly AppDbContext _db;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public CreateWorkstationHandler(AppDbContext db) => _db = db;
+    public CreateWorkstationHandler(AppDbContext db, IHttpContextAccessor httpContextAccessor)
+    {
+        _db = db;
+        _httpContextAccessor = httpContextAccessor;
+    }
 
     public async Task<WorkstationDto> Handle(CreateWorkstationCommand request, CancellationToken cancellationToken)
     {
+        _httpContextAccessor.HttpContext?.Items.Add("DB", "Primary");
+        _httpContextAccessor.HttpContext?.Items.Add("Cache", "Miss");
+
         var ws = new Workstation
         {
             Id = Guid.NewGuid(),

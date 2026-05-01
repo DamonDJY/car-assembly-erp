@@ -1,0 +1,94 @@
+# ============================================================
+# Phase 02 基础设施: PostgreSQL 主从复制 + Redis
+# bitnamilegacy/postgresql-repmgr 自动处理流复制配置
+# ============================================================
+
+services:
+  postgres-primary:
+    image: docker.io/bitnamilegacy/postgresql-repmgr:17
+    container_name: pg-primary
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_primary_data:/bitnami/postgresql
+    environment:
+      POSTGRESQL_POSTGRES_PASSWORD: adminpassword
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: postgres
+      POSTGRESQL_DATABASE: CarAssemblyErp
+      REPMGR_PASSWORD: repmgrpassword
+      REPMGR_PRIMARY_HOST: postgres-primary
+      REPMGR_PRIMARY_PORT: 5432
+      REPMGR_PARTNER_NODES: postgres-primary:5432,postgres-replica-1:5432,postgres-replica-2:5432
+      REPMGR_CONNECT_TIMEOUT: 5
+      REPMGR_RECONNECT_ATTEMPTS: 3
+      REPMGR_RECONNECT_INTERVAL: 5
+      REPMGR_NODE_NAME: node-1
+      REPMGR_NODE_ID: 1
+      REPMGR_NODE_NETWORK_NAME: postgres-primary
+
+  postgres-replica-1:
+    image: docker.io/bitnamilegacy/postgresql-repmgr:17
+    container_name: pg-replica-1
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_replica1_data:/bitnami/postgresql
+    environment:
+      POSTGRESQL_POSTGRES_PASSWORD: adminpassword
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: postgres
+      POSTGRESQL_DATABASE: CarAssemblyErp
+      REPMGR_PASSWORD: repmgrpassword
+      REPMGR_PRIMARY_HOST: postgres-primary
+      REPMGR_PRIMARY_PORT: 5432
+      REPMGR_PARTNER_NODES: postgres-primary:5432,postgres-replica-1:5432,postgres-replica-2:5432
+      REPMGR_CONNECT_TIMEOUT: 5
+      REPMGR_RECONNECT_ATTEMPTS: 3
+      REPMGR_RECONNECT_INTERVAL: 5
+      REPMGR_NODE_NAME: node-2
+      REPMGR_NODE_ID: 2
+      REPMGR_NODE_NETWORK_NAME: postgres-replica-1
+
+  postgres-replica-2:
+    image: docker.io/bitnamilegacy/postgresql-repmgr:17
+    container_name: pg-replica-2
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg_replica2_data:/bitnami/postgresql
+    environment:
+      POSTGRESQL_POSTGRES_PASSWORD: adminpassword
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: postgres
+      POSTGRESQL_DATABASE: CarAssemblyErp
+      REPMGR_PASSWORD: repmgrpassword
+      REPMGR_PRIMARY_HOST: postgres-primary
+      REPMGR_PRIMARY_PORT: 5432
+      REPMGR_PARTNER_NODES: postgres-primary:5432,postgres-replica-1:5432,postgres-replica-2:5432
+      REPMGR_CONNECT_TIMEOUT: 5
+      REPMGR_RECONNECT_ATTEMPTS: 3
+      REPMGR_RECONNECT_INTERVAL: 5
+      REPMGR_NODE_NAME: node-3
+      REPMGR_NODE_ID: 3
+      REPMGR_NODE_NETWORK_NAME: postgres-replica-2
+
+  redis:
+    image: redis:7-alpine
+    container_name: car-erp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pg_primary_data:
+  pg_replica1_data:
+  pg_replica2_data:
+  redis_data:
